@@ -16,7 +16,7 @@ def send_whatsapp_message(destination, message, context_id=None):
         "source": GUPSHUP_SOURCE_NUMBER,
         "destination": destination,
         "message": message,
-        "src.name": "TaskBot"
+        "src.name": "devchatbottest"
     }
     
     # Add context ID if it's a reply to a message
