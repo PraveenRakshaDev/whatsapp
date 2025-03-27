@@ -10,7 +10,7 @@ GUPSHUP_API_KEY = "hiddbulkh9541upcsqjblraadvg6wie6"
 GUPSHUP_SOURCE_NUMBER = "+917834811114"
 
 # Function to send message to WhatsApp via Gupshup
-def send_whatsapp_message(destination, message):
+def send_whatsapp_message(destination, message, context_id=None):
     payload = {
         "channel": "whatsapp",
         "source": GUPSHUP_SOURCE_NUMBER,
@@ -18,50 +18,48 @@ def send_whatsapp_message(destination, message):
         "message": message,
         "src.name": "TaskBot"
     }
+    
+    # Add context ID if it's a reply to a message
+    if context_id:
+        payload["context"] = context_id  
+
     headers = {
         "apikey": GUPSHUP_API_KEY,
         "Content-Type": "application/x-www-form-urlencoded"
     }
+
     response = requests.post(
-        "https://api.gupshup.io/sm/api/v1/msg",
+        "https://api.gupshup.io/wa/api/v1/msg",
         data=payload,
         headers=headers
     )
     print(f"Message sent response: {response.text}")
     return response.text
 
+
 # Route for Gupshup webhook callback
 @app.route('/gupshup-webhook', methods=['POST'])
 def gupshup_webhook():
     data = request.json
     print(f"Incoming webhook: {data}")
-    
+
     incoming_message = data.get('payload', {}).get('payload', {}).get('text', '').lower()
-    sender = data.get('payload', {}).get('payload', {}).get('source', '')
-    
-    # Pattern matching to detect task follow-up requests
-    match = re.search(r"follow up on task (\d+)", incoming_message)
-    
-    if match:
-        task_id = match.group(1)
-        # Example: In real scenario, you’d query your DB for task details
-        task_info = f"Task {task_id}: 'Submit report' is due today at 5 PM. Shall I remind you in 1 hour?"
-        send_whatsapp_message(sender, task_info)
-        
-    elif "hi" in incoming_message or "hello" in incoming_message:
-        welcome_message = "Hello! 👋 I am your Task Follow-Up Bot. You can type 'Follow up on task 101' and I’ll remind you!"
-        send_whatsapp_message(sender, welcome_message)
-        
-    elif "remind me" in incoming_message:
-        reminder_response = "✅ Reminder set! I’ll ping you again in 1 hour. Stay focused! 🚀"
-        send_whatsapp_message(sender, reminder_response)
-        
+    sender = data.get('payload', {}).get('source', '')
+    context_id = data.get('payload', {}).get('id', '')  # Extract message ID
+
+    if "hi" in incoming_message or "hello" in incoming_message:
+        welcome_message = "Hello! 👋 I am your Task Follow-Up Bot. How can I assist you today?"
+        send_whatsapp_message(sender, welcome_message, context_id)  # Pass context_id
+
+    elif "follow up on task" in incoming_message:
+        task_info = "Task follow-up request received! 🚀"
+        send_whatsapp_message(sender, task_info, context_id)
+
     else:
-        fallback_message = "I didn't quite get that. Type something like 'Follow up on task 123' and I'll help you track it!"
-        send_whatsapp_message(sender, fallback_message)
+        fallback_message = "I didn't quite understand. Try saying 'Follow up on task 123'."
+        send_whatsapp_message(sender, fallback_message, context_id)
 
     return jsonify({"status": "received"}), 200
-
 # Basic route
 @app.route('/')
 def home():
