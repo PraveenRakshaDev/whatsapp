@@ -6,7 +6,7 @@ import re
 app = Flask(__name__)
 
 # Your Gupshup credentials (replace with your actual API key and sandbox number)
-GUPSHUP_API_KEY = "hiddbulkh9541upcsqjblraadvg6wie6"
+GUPSHUP_API_KEY = "sk_3a8b1b9b219e45aaa473cb79d0574d2c"
 GUPSHUP_SOURCE_NUMBER = "+917834811114"
 
 # Function to send message to WhatsApp via Gupshup
