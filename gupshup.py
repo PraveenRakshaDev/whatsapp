@@ -46,20 +46,22 @@ def gupshup_webhook():
     incoming_message = data.get('payload', {}).get('payload', {}).get('text', '').lower()
     # sender = data.get('payload', {}).get('source', '')
     context_id = data.get('payload', {}).get('id', '')  # Extract message ID
+    
+     # Ignore empty messages (e.g., delivery receipts)
+    if not incoming_message:
+        print("Ignoring empty message")
+        return jsonify({"status": "ignored"}), 200
 
+      # Process valid messages
     if "hi" in incoming_message or "hello" in incoming_message:
-        welcome_message = "Hello! 👋 I am your Task Follow-Up Bot. How can I assist you today?"
-        send_whatsapp_message( welcome_message, context_id)  # Pass context_id
-
+        send_whatsapp_message("Hello! 👋", context_id)
     elif "follow up on task" in incoming_message:
-        task_info = "Task follow-up request received! 🚀"
-        send_whatsapp_message( task_info, context_id)
-
+        task_num = ''.join(filter(str.isdigit, incoming_message)) or "UNKNOWN"
+        send_whatsapp_message(f"🚀 Tracking Task {task_num}!", context_id)
     else:
-        fallback_message = "I didn't quite understand. Try saying 'Follow up on task 123'."
-        send_whatsapp_message( fallback_message, context_id)
+        send_whatsapp_message("Try 'Follow up on task 123'.", context_id)
 
-    return jsonify({"status": "received"}), 200
+    return jsonify({"status": "success"}), 200
 
 
 # Basic route
