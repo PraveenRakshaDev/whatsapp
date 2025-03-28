@@ -131,10 +131,6 @@ Here’s what I can do for you:
 
     return jsonify({"status": "success"}), 200
 
-
-def send_whatsapp_message(message, context_id):
-    """Mock function to simulate sending a message via WhatsApp"""
-    print(f"Sending WhatsApp message: {message} (Context ID: {context_id})")
 # Basic route
 @app.route('/')
 def home():
