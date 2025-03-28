@@ -37,100 +37,79 @@ def send_whatsapp_message( message, sender_number, context_id=None):
     return response.text
 
 # Store user tasks { user_id: [{task_id: str, description: str, status: str}] }
-user_tasks = {}
-user_context = {}  # Tracks the last action per user
-task_counter = 1  # Global counter for task IDs
+# Temporary storage for user responses
+user_data = {}  # Global counter for task IDs
 
+# Webhook to handle incoming messages
 @app.route('/gupshup-webhook', methods=['POST'])
 def gupshup_webhook():
-    global task_counter
-
     data = request.json
     print(f"Incoming webhook: {data}")
 
-    incoming_message = data.get('payload', {}).get('payload', {}).get('text', '').strip()
-    sender_id = data.get('payload', {}).get('source', '')  # Unique user ID
+    incoming_message = data.get('payload', {}).get('payload', {}).get('text', '').lower()
+    sender_number = data.get('payload', {}).get('source', '')  # Get sender's number
     context_id = data.get('payload', {}).get('id', '')  # Message ID
-    sender_number = data.get('payload', {}).get('source', '')
 
-    # Ignore empty messages
     if not incoming_message:
+        print("Ignoring empty message")
         return jsonify({"status": "ignored"}), 200
 
-    # Retrieve user context and tasks
-    last_action = user_context.get(sender_id, "")
-    user_tasks.setdefault(sender_id, [])
+    # Start Sign-off process
+    if "signoff" in incoming_message:
+        user_data[sender_number] = {
+            "CRM Ref": None,
+            "Remarks": None,
+            "Pipeline Stage": None,
+            "Case Locking Status": None,
+            "Incoming Commercial Quote Status": None,
+            "POC / Demo Status": None,
+            "Joint Meeting Status": None,
+            "Budget Approval Status": None
+        }
+        send_whatsapp_message(
+            "📝 *Sign-off Process Started!*\n\nPlease provide *CRM Reference Number*:", 
+            sender_number, context_id
+        )
+    elif sender_number in user_data and user_data[sender_number]["CRM Ref"] is None:
+        user_data[sender_number]["CRM Ref"] = incoming_message
+        send_whatsapp_message("📌 *CRM Ref Saved!* Now enter *Remarks*:", sender_number, context_id)
+    elif sender_number in user_data and user_data[sender_number]["Remarks"] is None:
+        user_data[sender_number]["Remarks"] = incoming_message
+        send_whatsapp_message("📊 *Remarks Saved!* Now enter *Pipeline Stage*:", sender_number, context_id)
+    elif sender_number in user_data and user_data[sender_number]["Pipeline Stage"] is None:
+        user_data[sender_number]["Pipeline Stage"] = incoming_message
+        send_whatsapp_message("🔒 *Pipeline Stage Saved!* Now enter *Case Locking Status*:", sender_number, context_id)
+    elif sender_number in user_data and user_data[sender_number]["Case Locking Status"] is None:
+        user_data[sender_number]["Case Locking Status"] = incoming_message
+        send_whatsapp_message("📑 *Case Locking Status Saved!* Now enter *Incoming Commercial Quote Status*:", sender_number, context_id)
+    elif sender_number in user_data and user_data[sender_number]["Incoming Commercial Quote Status"] is None:
+        user_data[sender_number]["Incoming Commercial Quote Status"] = incoming_message
+        send_whatsapp_message("📜 *Quote Status Saved!* Now enter *POC / Demo Status*:", sender_number, context_id)
+    elif sender_number in user_data and user_data[sender_number]["POC / Demo Status"] is None:
+        user_data[sender_number]["POC / Demo Status"] = incoming_message
+        send_whatsapp_message("🎤 *POC / Demo Status Saved!* Now enter *Joint Meeting Status*:", sender_number, context_id)
+    elif sender_number in user_data and user_data[sender_number]["Joint Meeting Status"] is None:
+        user_data[sender_number]["Joint Meeting Status"] = incoming_message
+        send_whatsapp_message("💰 *Joint Meeting Status Saved!* Now enter *Budget Approval Status*:", sender_number, context_id)
+    elif sender_number in user_data and user_data[sender_number]["Budget Approval Status"] is None:
+        user_data[sender_number]["Budget Approval Status"] = incoming_message
+        # Confirm all details
+        confirmation_message = f"""✅ *Sign-off Complete!*
+📌 CRM Ref: {user_data[sender_number]['CRM Ref']}
+📝 Remarks: {user_data[sender_number]['Remarks']}
+📊 Pipeline Stage: {user_data[sender_number]['Pipeline Stage']}
+🔒 Case Locking Status: {user_data[sender_number]['Case Locking Status']}
+📑 Incoming Quote Status: {user_data[sender_number]['Incoming Commercial Quote Status']}
+🎤 POC/Demo Status: {user_data[sender_number]['POC / Demo Status']}
+💼 Joint Meeting Status: {user_data[sender_number]['Joint Meeting Status']}
+💰 Budget Approval Status: {user_data[sender_number]['Budget Approval Status']}"""
 
-    # Greet user and show menu
-    if incoming_message.lower() in ["hi", "hello"]:
-        welcome_message = """👋 *Welcome to Task Manager Bot!*  
-
-🔹 I can help you manage your tasks efficiently.  
-Here’s what I can do for you:  
-
-1️⃣ *Add Task* - Create a new task  
-2️⃣ *List Tasks* - Show all your tasks  
-  
-
-👉 Reply with the number or keyword to proceed."""
-        send_whatsapp_message(welcome_message, sender_number, context_id)
-        user_context[sender_id] = ""  # Reset context
-
-    # Add Task Flow
-    elif incoming_message.lower() in ["add task", "1"]:
-        send_whatsapp_message("✏️ *Please describe your task.*\nExample: 'Submit report by 5 PM'.",sender_number, context_id)
-        user_context[sender_id] = "adding_task"
-
-    elif last_action == "adding_task":
-        task_id = task_counter
-        task_counter += 1  # Increment for next task
-        user_tasks[sender_id].append({"task_id": task_id, "description": incoming_message, "status": "Pending"})
-        send_whatsapp_message(f"✅ *Task added successfully!*\nYour task: '{incoming_message}'",sender_number, context_id)
-        user_context[sender_id] = ""  # Reset context
-
-    # List Tasks
-    elif incoming_message.lower() in ["list tasks", "2"]:
-        if not user_tasks[sender_id]:
-            send_whatsapp_message("📋 *You have no tasks yet!*\nUse 'Add Task' to create one.",sender_number, context_id)
-        else:
-            task_list = "\n".join([f"{task['task_id']}. {task['description']} - *{task['status']}*" for task in user_tasks[sender_id]])
-            send_whatsapp_message(f"📋 *Your Tasks:*\n{task_list}\n\n👉 Reply 'Complete Task <ID>' or 'Delete Task <ID>'.",sender_number, context_id)
-        user_context[sender_id] = ""
-
-    # Complete Task
-    elif incoming_message.lower().startswith("complete task") or incoming_message.startswith("3"):
-        try:
-            task_id = int(incoming_message.split()[-1])
-            for task in user_tasks[sender_id]:
-                if task["task_id"] == task_id:
-                    task["status"] = "Completed"
-                    send_whatsapp_message(f"✅ *Task {task_id} marked as completed!*",sender_number, context_id)
-                    break
-            else:
-                send_whatsapp_message(f"⚠️ *Task {task_id} not found!*",sender_number, context_id)
-        except ValueError:
-            send_whatsapp_message("⚠️ *Invalid format!*\nTry 'Complete Task <ID>'.",sender_number, context_id)
-
-    # Delete Task
-    elif incoming_message.lower().startswith("delete task") or incoming_message.startswith("4"):
-        try:
-            task_id = int(incoming_message.split()[-1])
-            user_tasks[sender_id] = [task for task in user_tasks[sender_id] if task["task_id"] != task_id]
-            send_whatsapp_message(f"🗑️ *Task {task_id} deleted successfully!*",sender_number, context_id)
-        except ValueError:
-            send_whatsapp_message("⚠️ *Invalid format!*\nTry 'Delete Task <ID>'.",sender_number, context_id)
-
-    # Follow-up on Task
-    elif "follow up on task" in incoming_message.lower():
-        task_num = ''.join(filter(str.isdigit, incoming_message)) or "UNKNOWN"
-        send_whatsapp_message(f"🚀 *Tracking Task {task_num}!*",sender_number, context_id)
-
-    # Default Response for Unrecognized Messages
+        send_whatsapp_message(confirmation_message, sender_number, context_id)
+        del user_data[sender_number]  # Remove after completion
     else:
-        send_whatsapp_message("❓ *I didn't understand that.*\nTry 'hi' to see available options.",sender_number, context_id)
+        send_whatsapp_message("I didn't understand that. Try sending 'signoff' to start.", sender_number, context_id)
 
     return jsonify({"status": "success"}), 200
-
 # Basic route
 @app.route('/')
 def home():
