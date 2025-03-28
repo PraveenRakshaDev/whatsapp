@@ -69,8 +69,7 @@ Here’s what I can do for you:
 
 1️⃣ *Add Task* - Create a new task  
 2️⃣ *List Tasks* - Show all your tasks  
-3️⃣ *Complete Task* - Mark a task as done  
-4️⃣ *Delete Task* - Remove a task  
+  
 
 👉 Reply with the number or keyword to proceed."""
         send_whatsapp_message(welcome_message, context_id)
