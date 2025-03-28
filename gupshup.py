@@ -36,28 +36,33 @@ def send_whatsapp_message( message, context_id=None):
     print(f"Message sent response: {response.text}")
     return response.text
 
-user_context = {}
-# Route for Gupshup webhook callback
+# Store user tasks { user_id: [{task_id: str, description: str, status: str}] }
+user_tasks = {}
+user_context = {}  # Tracks the last action per user
+task_counter = 1  # Global counter for task IDs
+
 @app.route('/gupshup-webhook', methods=['POST'])
 def gupshup_webhook():
+    global task_counter
+
     data = request.json
     print(f"Incoming webhook: {data}")
 
-    incoming_message = data.get('payload', {}).get('payload', {}).get('text', '').strip().lower()
-    sender_id = data.get('payload', {}).get('source', '')  # User's unique ID
+    incoming_message = data.get('payload', {}).get('payload', {}).get('text', '').strip()
+    sender_id = data.get('payload', {}).get('source', '')  # Unique user ID
     context_id = data.get('payload', {}).get('id', '')  # Message ID
-    
-    # Ignore empty messages (e.g., delivery receipts)
+
+    # Ignore empty messages
     if not incoming_message:
-        print("Ignoring empty message")
         return jsonify({"status": "ignored"}), 200
 
-    # Retrieve previous context for the user
-    last_action = user_context.get(sender_id, None)
+    # Retrieve user context and tasks
+    last_action = user_context.get(sender_id, "")
+    user_tasks.setdefault(sender_id, [])
 
-    # Greet user and provide options
-    if incoming_message in ["hi", "hello"]:
-        welcome = """👋 *Welcome to Task Manager Bot*!  
+    # Greet user and show menu
+    if incoming_message.lower() in ["hi", "hello"]:
+        welcome_message = """👋 *Welcome to Task Manager Bot!*  
 
 🔹 I can help you manage your tasks efficiently.  
 Here’s what I can do for you:  
@@ -68,56 +73,68 @@ Here’s what I can do for you:
 4️⃣ *Delete Task* - Remove a task  
 
 👉 Reply with the number or keyword to proceed."""
-        send_whatsapp_message(welcome, context_id)
-        user_context[sender_id] = None  # Reset context after greeting
+        send_whatsapp_message(welcome_message, context_id)
+        user_context[sender_id] = ""  # Reset context
 
     # Add Task Flow
-    elif incoming_message in ["add task", "1"]:
+    elif incoming_message.lower() in ["add task", "1"]:
         send_whatsapp_message("✏️ *Please describe your task.*\nExample: 'Submit report by 5 PM'.", context_id)
-        user_context[sender_id] = "adding_task"  # Store user's intent
+        user_context[sender_id] = "adding_task"
 
     elif last_action == "adding_task":
+        task_id = task_counter
+        task_counter += 1  # Increment for next task
+        user_tasks[sender_id].append({"task_id": task_id, "description": incoming_message, "status": "Pending"})
         send_whatsapp_message(f"✅ *Task added successfully!*\nYour task: '{incoming_message}'", context_id)
-        user_context[sender_id] = None  # Reset context after task addition
+        user_context[sender_id] = ""  # Reset context
 
     # List Tasks
-    elif incoming_message in ["list tasks", "2"]:
-        send_whatsapp_message("📋 *Here are your pending tasks:*\n1️⃣ Task A\n2️⃣ Task B\n👉 Reply with a task number to view details.", context_id)
-        user_context[sender_id] = "listing_tasks"
-
-    elif last_action == "listing_tasks":
-        send_whatsapp_message(f"📌 *Task Details for Task {incoming_message}*\n[Task description goes here]", context_id)
-        user_context[sender_id] = None  # Reset context
+    elif incoming_message.lower() in ["list tasks", "2"]:
+        if not user_tasks[sender_id]:
+            send_whatsapp_message("📋 *You have no tasks yet!*\nUse 'Add Task' to create one.", context_id)
+        else:
+            task_list = "\n".join([f"{task['task_id']}. {task['description']} - *{task['status']}*" for task in user_tasks[sender_id]])
+            send_whatsapp_message(f"📋 *Your Tasks:*\n{task_list}\n\n👉 Reply 'Complete Task <ID>' or 'Delete Task <ID>'.", context_id)
+        user_context[sender_id] = ""
 
     # Complete Task
-    elif incoming_message in ["complete task", "3"]:
-        send_whatsapp_message("✅ *Please provide the Task ID you want to mark as completed.*\nExample: 'Complete Task 1'.", context_id)
-        user_context[sender_id] = "completing_task"
-
-    elif last_action == "completing_task":
-        send_whatsapp_message(f"🎉 *Task {incoming_message} marked as completed!*", context_id)
-        user_context[sender_id] = None  # Reset context
+    elif incoming_message.lower().startswith("complete task") or incoming_message.startswith("3"):
+        try:
+            task_id = int(incoming_message.split()[-1])
+            for task in user_tasks[sender_id]:
+                if task["task_id"] == task_id:
+                    task["status"] = "Completed"
+                    send_whatsapp_message(f"✅ *Task {task_id} marked as completed!*", context_id)
+                    break
+            else:
+                send_whatsapp_message(f"⚠️ *Task {task_id} not found!*", context_id)
+        except ValueError:
+            send_whatsapp_message("⚠️ *Invalid format!*\nTry 'Complete Task <ID>'.", context_id)
 
     # Delete Task
-    elif incoming_message in ["delete task", "4"]:
-        send_whatsapp_message("🗑️ *Please provide the Task ID you want to delete.*\nExample: 'Delete Task 2'.", context_id)
-        user_context[sender_id] = "deleting_task"
+    elif incoming_message.lower().startswith("delete task") or incoming_message.startswith("4"):
+        try:
+            task_id = int(incoming_message.split()[-1])
+            user_tasks[sender_id] = [task for task in user_tasks[sender_id] if task["task_id"] != task_id]
+            send_whatsapp_message(f"🗑️ *Task {task_id} deleted successfully!*", context_id)
+        except ValueError:
+            send_whatsapp_message("⚠️ *Invalid format!*\nTry 'Delete Task <ID>'.", context_id)
 
-    elif last_action == "deleting_task":
-        send_whatsapp_message(f"🗑️ *Task {incoming_message} has been deleted successfully!*", context_id)
-        user_context[sender_id] = None  # Reset context
-
-    # Task Follow-up
-    elif "follow up on task" in incoming_message:
+    # Follow-up on Task
+    elif "follow up on task" in incoming_message.lower():
         task_num = ''.join(filter(str.isdigit, incoming_message)) or "UNKNOWN"
-        send_whatsapp_message(f"🚀 *Tracking Task {task_num}!*\nI’ll keep you updated on its progress.", context_id)
+        send_whatsapp_message(f"🚀 *Tracking Task {task_num}!*", context_id)
 
-    # Default response
+    # Default Response for Unrecognized Messages
     else:
         send_whatsapp_message("❓ *I didn't understand that.*\nTry 'hi' to see available options.", context_id)
 
     return jsonify({"status": "success"}), 200
 
+
+def send_whatsapp_message(message, context_id):
+    """Mock function to simulate sending a message via WhatsApp"""
+    print(f"Sending WhatsApp message: {message} (Context ID: {context_id})")
 # Basic route
 @app.route('/')
 def home():
